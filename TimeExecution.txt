@@ -1,0 +1,43 @@
+
+Non-Parallel
+Thread: 1; Dimensions: 50; Average Time in seconds: 1.49585e-05
+Thread: 1; Dimensions: 100; Average Time in seconds: 5.9917e-05
+Thread: 1; Dimensions: 500; Average Time in seconds: 0.00152637
+Thread: 1; Dimensions: 1000; Average Time in seconds: 0.00615265
+Thread: 1; Dimensions: 10000; Average Time in seconds: 0.628312
+Parallel Thread: 4
+Dimensions: 50; Average Time in seconds: 5.0312e-05
+Dimensions: 100; Average Time in seconds: 6.3479e-05
+Dimensions: 500; Average Time in seconds: 0.000457479
+Dimensions: 1000; Average Time in seconds: 0.00169456
+Dimensions: 10000; Average Time in seconds: 0.166367
+Parallel Thread: 8
+Dimensions: 50; Average Time in seconds: 8.86455e-05
+Dimensions: 100; Average Time in seconds: 9.4229e-05
+Dimensions: 500; Average Time in seconds: 0.00045775
+Dimensions: 1000; Average Time in seconds: 0.00151502
+Dimensions: 10000; Average Time in seconds: 0.129171
+Parallel Thread: 16
+Dimensions: 50; Average Time in seconds: 0.000177855
+Dimensions: 100; Average Time in seconds: 0.000187146
+Dimensions: 500; Average Time in seconds: 0.000470625
+Dimensions: 1000; Average Time in seconds: 0.00150579
+Dimensions: 10000; Average Time in seconds: 0.129042
+Parallel Thread: 32
+Dimensions: 50; Average Time in seconds: 0.000375271
+Dimensions: 100; Average Time in seconds: 0.000372791
+Dimensions: 500; Average Time in seconds: 0.000568542
+Dimensions: 1000; Average Time in seconds: 0.00158002
+Dimensions: 10000; Average Time in seconds: 0.128808
+Parallel Thread: 64
+Dimensions: 50; Average Time in seconds: 0.000750833
+Dimensions: 100; Average Time in seconds: 0.00075848
+Dimensions: 500; Average Time in seconds: 0.000833583
+Dimensions: 1000; Average Time in seconds: 0.00186902
+Dimensions: 10000; Average Time in seconds: 0.128999
+Parallel Thread: 128
+Dimensions: 50; Average Time in seconds: 0.00152231
+Dimensions: 100; Average Time in seconds: 0.00152296
+Dimensions: 500; Average Time in seconds: 0.00159069
+Dimensions: 1000; Average Time in seconds: 0.00254665
+Dimensions: 10000; Average Time in seconds: 0.131718
