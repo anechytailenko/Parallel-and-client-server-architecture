@@ -1,0 +1,5 @@
+Research
+Average time of thread in waiting state: 0.290575
+Amount of rejected threads: 14
+Max time until queue is filled: 17
+Min time until queue is filled: 0
