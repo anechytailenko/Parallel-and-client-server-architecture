@@ -11,6 +11,12 @@
 #include <cstdlib>
 #include <cstdio>
 #include <dirent.h>
+#include <cstdlib>
+
+
+
+
+
 
 #define serverPort 8080
 #define CHUNK_SIZE 1024
@@ -52,7 +58,7 @@ int connectServer() {
 }
 
 string getCommand() {
-    string pattern = R"(^(GET|PUT|DELETE|INFO)\s([a-zA-Z0-9_-]+\.txt)$|^LIST$|^EXIT$)";
+    string pattern = R"(^(GET|PUT|DELETE|INFO)\s\w+\s([a-zA-Z0-9_-]+\.txt)$|^LIST\s\w+$|^EXIT$)";
     regex rgx(pattern);
 
     string userCommand;
@@ -84,8 +90,10 @@ enum class OpCode: uint8_t {
 class serverCommunication {
     uint8_t tag;
     char* argument = nullptr;
+    char* fileFolder = nullptr;
     uint32_t argumentLen = 0x00;
-    bool activeSession  ;
+    uint32_t fileFolderLen = 0x00;
+    bool activeSession ;
     void (serverCommunication::*availableCommands[6])();
     public :
 
@@ -97,6 +105,7 @@ class serverCommunication {
         availableCommands[4] = &serverCommunication::commandINFO;
         availableCommands[5] = &serverCommunication::commandEXIT;
         activeSession = true ;
+        askClientName();
         startNewCommand();
     }
 
@@ -118,23 +127,29 @@ class serverCommunication {
 
     void sendCommand() {
 
-        send(clientSocket,&tag,sizeof(tag),0) ;
+        send(clientSocket,&tag,sizeof(tag),0);
+
+        if (fileFolder!= nullptr) {
+            send(clientSocket,&(fileFolderLen),sizeof(fileFolderLen),0);
+            send(clientSocket,fileFolder,strlen(fileFolder),0);
+        }
 
         if (argument != nullptr) {
-
             send(clientSocket,&(argumentLen),sizeof(argumentLen),0);
             send(clientSocket,argument,strlen(argument),0 );
-
         }
 
     }
 
     void commandGET() {
+
+        bool isDirExistOnServer;
+        recv(clientSocket,&isDirExistOnServer,sizeof(isDirExistOnServer),0);
         bool isFileExistOnServer;
         recv(clientSocket,&isFileExistOnServer,sizeof(isFileExistOnServer),0);
 
 
-        if (isFileExistOnServer){
+        if (isFileExistOnServer && isDirExistOnServer) {
             bool isFileExistsLocal = isFileExists(argument);
             bool isOverwrite = true;
             if (isFileExistsLocal) {
@@ -142,42 +157,43 @@ class serverCommunication {
                 isOverwrite = handleOverwriting();
             }
             send(clientSocket,&isOverwrite,sizeof(isOverwrite),0);
-            if (!isOverwrite) return;
 
 
-            fstream file(string(PATH) + "/"+ argument, std::ios::out);
+            if (isOverwrite) {
 
-            uint64_t fileSize;
-            recv(clientSocket,&fileSize,sizeof(fileSize),0);
-            fileSize = ntohll(fileSize);
+                fstream file(string(PATH) + "/"+ argument, std::ios::out);
 
-            readStrFromServer();
-            cout << argument;
+                uint64_t fileSize;
+                recv(clientSocket,&fileSize,sizeof(fileSize),0);
+                fileSize = ntohll(fileSize);
 
-            if (fileSize != 0) {
-                uint64_t bytesReceived = 0;
+                readStrFromServer();
+                cout << argument;
 
-                char buffer[1024];
-                while (bytesReceived < fileSize) {
+                if (fileSize != 0) {
+                    uint64_t bytesReceived = 0;
 
-                    int bytes = recv(clientSocket, buffer, (CHUNK_SIZE < (fileSize - bytesReceived)) ? CHUNK_SIZE : (fileSize - bytesReceived), 0);
+                    char buffer[1024];
+                    while (bytesReceived < fileSize) {
 
-                    if (bytes > 0) {
-                        file.write(buffer, bytes);
-                        bytesReceived += bytes;
+                        int bytes = recv(clientSocket, buffer, (CHUNK_SIZE < (fileSize - bytesReceived)) ? CHUNK_SIZE : (fileSize - bytesReceived), 0);
+
+                        if (bytes > 0) {
+                            file.write(buffer, bytes);
+                            bytesReceived += bytes;
+                        }
+
                     }
-
+                    file.close();
                 }
-                file.close();
+
+
+                readStrFromServer();
+                cout << argument;
+
+
             }
-
-
-            readStrFromServer();
-            cout << argument;
-
-
         } else {
-
             readStrFromServer();
             cout << argument;
         }
@@ -189,6 +205,8 @@ class serverCommunication {
 
 
     void commandLIST() {
+        bool isDirOnServer;
+        recv(clientSocket,&(isDirOnServer),sizeof(isDirOnServer),0);
         readStrFromServer();
         cout << argument;
         startNewCommand();
@@ -196,53 +214,51 @@ class serverCommunication {
     }
 
     void commandPUT() {
-
-        bool isFileExistLocal = isFileExists(argument);
-
-        if (isFileExistLocal) {
-
-            bool isFileExistOnServer;
-            recv(clientSocket,&isFileExistOnServer,sizeof(isFileExistOnServer),0);
-
-            bool isToOverwriteFileOnServer = true;
-            if(isFileExistOnServer) {
-                cout << "\033[34mThe file with the same name is stored on the server. Do you want to overwrite it [y/n]? \033[0m\n";
-                isToOverwriteFileOnServer = handleOverwriting();
-            }
-            send(clientSocket,&isToOverwriteFileOnServer,sizeof(isToOverwriteFileOnServer),0);
-            if (!isToOverwriteFileOnServer) return;
-
-
-            string filePath = string(PATH) +"/"+ argument;
-            fstream file(filePath, ios::in);
-            file.seekg(0, std::ios::end);
-            uint64_t fileSize = htonll(static_cast<uint64_t>(file.tellg()));
-            file.seekg(0, std::ios::beg);
-
-            send(clientSocket,&fileSize,sizeof(fileSize),0);
-            readStrFromServer();
-            cout<< argument;
-
-            if (ntohll(fileSize) != 0) {
-
-                char buffer[1024];
-                while (file.read(buffer, CHUNK_SIZE)) {
-                    send(clientSocket, buffer, CHUNK_SIZE, 0);
+        bool isDirExistOnServer;
+        recv(clientSocket,&isDirExistOnServer,sizeof(isDirExistOnServer),0);
+        if (isDirExistOnServer) {
+            bool isFileLocalExist = isFileExists(argument);
+            send(clientSocket,&isFileLocalExist,sizeof(isFileLocalExist),0);
+            if(isFileLocalExist) {
+                bool isFileExistOnServer;
+                recv(clientSocket,&isFileExistOnServer,sizeof(isDirExistOnServer),0);
+                bool isOverwrite = true;
+                if(isFileExistOnServer) {
+                    cout << "There is the file with the same name on the server.Do you want to overwrite it?[y/n]"<< endl;
+                    isOverwrite = handleOverwriting();
                 }
-                if (file.gcount() > 0) {
-                    send(clientSocket, buffer, file.gcount(), 0);
-                }
+                send(clientSocket,&isOverwrite,sizeof(isOverwrite),0);
+                if(isOverwrite) {
+                    string filePath = string(PATH) +"/"+ argument;
+                    fstream file(filePath, ios::in);
+                    file.seekg(0, std::ios::end);
+                    uint64_t fileSize = htonll(static_cast<uint64_t>(file.tellg()));
+                    file.seekg(0, std::ios::beg);
 
-                file.close();
+                    send(clientSocket,&fileSize,sizeof(fileSize),0);
+                    readStrFromServer();
+                    cout<< argument;
+
+                    if (ntohll(fileSize) != 0) {
+
+                        char buffer[1024];
+                        while (file.read(buffer, CHUNK_SIZE)) {
+                            send(clientSocket, buffer, CHUNK_SIZE, 0);
+                        }
+                        if (file.gcount() > 0) {
+                            send(clientSocket, buffer, file.gcount(), 0);
+                        }
+
+                        file.close();
+                    }
+                }
             }
-            readStrFromServer();
-            cout << argument;
-        } else {
-            cout <<  "\033[31mThere is no such file locally\033[0m\n";
+        }
+        readStrFromServer();
+        cout << argument;
+        startNewCommand();
 
         }
-        startNewCommand();
-    }
 
 
 
@@ -256,13 +272,10 @@ class serverCommunication {
 
     void commandINFO() {
 
-        bool isFileExistOnServer;
-        recv(clientSocket, &isFileExistOnServer,sizeof(isFileExistOnServer),0);
+        bool isDataAvailable ;
+        recv(clientSocket,&isDataAvailable,sizeof(isDataAvailable),0);
 
-        if(!isFileExistOnServer) {
-            readStrFromServer();
-           cout << argument;
-        } else {
+        if(isDataAvailable) {
             uint64_t fileSize;
             recv(clientSocket,&fileSize,sizeof(fileSize),0);
             fileSize = ntohll(fileSize);
@@ -290,16 +303,28 @@ class serverCommunication {
             readStrFromServer();
             cout << argument;
 
+        } else {
+           readStrFromServer();
+            cout << argument;
         }
 
         startNewCommand();
     }
 
     void readStrFromServer() {
-        recv(clientSocket,&argumentLen, sizeof(argumentLen),0);
+        if (recv(clientSocket,&argumentLen, sizeof(argumentLen),0)==0) {
+            cout << "Server is unresponsive";
+            close(clientSocket);
+            exit(EXIT_FAILURE);
+        };
         argument = new char[ntohl(argumentLen)+1];
-        recv(clientSocket,argument, ntohl(argumentLen),0);
+        if (recv(clientSocket,argument, ntohl(argumentLen),0) == 0) {
+            cout << "Server is unresponsive";
+            close(clientSocket);
+            exit(EXIT_FAILURE);
+        };
         argument[ntohl(argumentLen)] = '\0';
+
 
     }
 
@@ -328,7 +353,6 @@ class serverCommunication {
                 if (answer == 'y' || answer == 'Y') {
                     validAnswer = true;
                 } else if (answer == 'n' || answer == 'N') {
-                    cout << "\033[38;2;255;0;0mOperation canceled.\033[0m\n";
                     return false;
                 } else {
                     cout << "\033[38;2;255;0;0mmInvalid input.\033[0m\n";
@@ -340,6 +364,7 @@ class serverCommunication {
 
 
     void commandEXIT() {
+        close(clientSocket);
         activeSession = false;
         startNewCommand();
     }
@@ -350,22 +375,47 @@ class serverCommunication {
             argument = nullptr;
             string userCommand = getCommand();
             istringstream commandStream(userCommand);
-            string tagStr, argStr;
+            string tagStr, folderName, fileName ;
 
             commandStream >> tagStr ;
             tag = static_cast<uint8_t>(stringToOpCode(tagStr));
 
-            if (commandStream >> argStr) {
-                argument = new char[argStr.length() + 1];
-                strcpy(argument,argStr.c_str());
+            if (commandStream >> folderName) {
+                fileFolder = new char[folderName.length() + 1];
+                strcpy(fileFolder,folderName.c_str());
+                fileFolderLen = htonl(strlen(fileFolder));
+            }
+
+            if (commandStream >> fileName) {
+                argument = new char[fileName.length() + 1];
+                strcpy(argument,fileName.c_str());
                 argumentLen = htonl(strlen(argument));
             }
+
 
             sendCommand();
 
             (this->*availableCommands[static_cast<int>(tag) - 1])();
         }
         return 1;
+    }
+
+
+    void askClientName() {
+        cout << "\033[38;2;128;0;128mEnter your name: \033[0m";
+        string clientName;
+        getline(cin,clientName);
+        sendStrToServer(clientName);
+        readStrFromServer();
+        cout << argument;
+    }
+
+    void sendStrToServer(string entity) {
+        uint32_t sizeOfString = htonl(entity.length());
+        send(clientSocket,&sizeOfString, sizeof(sizeOfString),0);
+        send(clientSocket,entity.c_str(),entity.length(),0);
+
+
     }
 };
 
@@ -382,6 +432,29 @@ int main()
 
 
      serverCommunication* server_communication = new serverCommunication();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
